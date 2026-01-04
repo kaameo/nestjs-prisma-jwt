@@ -1,18 +1,25 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ZodValidationPipe } from 'nestjs-zod';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-    }),
-  );
+  // Security Headers
+  app.use(helmet());
+
+  // CORS Configuration
+  app.enableCors({
+    origin: process.env.NODE_ENV === 'production'
+      ? ['https://yourdomain.com']
+      : ['http://localhost:3000', 'http://localhost:5173'],
+    credentials: true,
+  });
+
+  // Zod Validation
+  app.useGlobalPipes(new ZodValidationPipe());
 
   // Swagger
   const config = new DocumentBuilder()

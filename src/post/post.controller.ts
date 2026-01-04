@@ -33,10 +33,7 @@ export class PostController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new post' })
   @ApiResponse({ status: 201, type: PostResponseDto })
-  create(
-    @CurrentUser() user: { id: string },
-    @Body() dto: CreatePostDto,
-  ) {
+  create(@CurrentUser() user: { id: string }, @Body() dto: CreatePostDto) {
     return this.postService.create(user.id, dto);
   }
 
@@ -89,10 +86,7 @@ export class PostController {
   @ApiResponse({ status: 200, description: 'Post deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Post not found' })
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: { id: string },
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.postService.remove(id, user.id);
   }
 }

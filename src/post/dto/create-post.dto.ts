@@ -1,19 +1,12 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsBoolean, IsOptional, MinLength } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class CreatePostDto {
-  @ApiProperty({ example: 'My First Post' })
-  @IsString()
-  @MinLength(1)
-  title: string;
+export const CreatePostSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  content: z.string().min(1, 'Content is required'),
+  published: z.boolean().default(false).optional(),
+});
 
-  @ApiProperty({ example: 'This is the content of my first post.' })
-  @IsString()
-  @MinLength(1)
-  content: string;
+export class CreatePostDto extends createZodDto(CreatePostSchema) {}
 
-  @ApiPropertyOptional({ example: false, default: false })
-  @IsBoolean()
-  @IsOptional()
-  published?: boolean;
-}
+export type CreatePostType = z.infer<typeof CreatePostSchema>;
