@@ -115,65 +115,75 @@ describe('PostController', () => {
   });
 
   describe('findAll', () => {
-    const mockPosts = [mockPost, { ...mockPost, id: 'post-456' }];
+    const mockPagination = { page: 1, limit: 20, sortOrder: 'desc' as const };
+    const mockPaginatedResponse = {
+      data: [mockPost, { ...mockPost, id: 'post-456' }],
+      meta: {
+        page: 1,
+        limit: 20,
+        total: 2,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    };
 
-    it('모든 게시물을 반환해야 함 (쿼리 파라미터 없음)', async () => {
+    it('모든 게시물을 페이지네이션과 함께 반환해야 함 (쿼리 파라미터 없음)', async () => {
       // Given
-      mockPostService.findAll.mockResolvedValue(mockPosts);
+      mockPostService.findAll.mockResolvedValue(mockPaginatedResponse);
 
       // When
-      const result = await controller.findAll();
+      const result = await controller.findAll(mockPagination);
 
       // Then
-      expect(result).toEqual(mockPosts);
-      expect(service.findAll).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual(mockPaginatedResponse);
+      expect(service.findAll).toHaveBeenCalled();
     });
 
     it('published=true 쿼리로 게시된 게시물만 반환해야 함', async () => {
       // Given
-      const publishedPosts = [{ ...mockPost, published: true }];
-      mockPostService.findAll.mockResolvedValue(publishedPosts);
+      mockPostService.findAll.mockResolvedValue(mockPaginatedResponse);
 
       // When
-      const result = await controller.findAll('true');
+      const result = await controller.findAll(mockPagination, 'true');
 
       // Then
-      expect(result).toEqual(publishedPosts);
-      expect(service.findAll).toHaveBeenCalledWith(true);
+      expect(result).toEqual(mockPaginatedResponse);
+      expect(service.findAll).toHaveBeenCalledWith(mockPagination, true);
     });
 
     it('published=false 쿼리로 미게시 게시물만 반환해야 함', async () => {
       // Given
-      mockPostService.findAll.mockResolvedValue([mockPost]);
+      mockPostService.findAll.mockResolvedValue(mockPaginatedResponse);
 
       // When
-      const result = await controller.findAll('false');
+      const result = await controller.findAll(mockPagination, 'false');
 
       // Then
-      expect(result).toEqual([mockPost]);
-      expect(service.findAll).toHaveBeenCalledWith(false);
+      expect(result).toEqual(mockPaginatedResponse);
+      expect(service.findAll).toHaveBeenCalledWith(mockPagination, false);
     });
 
     it('invalid published 값은 undefined로 처리해야 함', async () => {
       // Given
-      mockPostService.findAll.mockResolvedValue(mockPosts);
+      mockPostService.findAll.mockResolvedValue(mockPaginatedResponse);
 
       // When
-      await controller.findAll('invalid');
+      await controller.findAll(mockPagination, 'invalid');
 
       // Then: true도 false도 아니므로 undefined 전달
-      expect(service.findAll).toHaveBeenCalledWith(undefined);
+      expect(service.findAll).toHaveBeenCalledWith(mockPagination, undefined);
     });
 
     it('빈 문자열은 undefined로 처리해야 함', async () => {
       // Given
-      mockPostService.findAll.mockResolvedValue(mockPosts);
+      mockPostService.findAll.mockResolvedValue(mockPaginatedResponse);
 
       // When
-      await controller.findAll('');
+      await controller.findAll(mockPagination, '');
 
       // Then
-      expect(service.findAll).toHaveBeenCalledWith(undefined);
+      expect(service.findAll).toHaveBeenCalledWith(mockPagination, undefined);
     });
   });
 

@@ -3,6 +3,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,11 +14,18 @@ async function bootstrap() {
 
   // CORS Configuration
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production'
-      ? ['https://yourdomain.com']
-      : ['http://localhost:3000', 'http://localhost:5173'],
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? process.env.CORS_ORIGIN?.split(',') || []
+        : ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
   });
+
+  // Global Exception Filter
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Global Logging Interceptor
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Zod Validation
   app.useGlobalPipes(new ZodValidationPipe());

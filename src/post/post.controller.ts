@@ -22,6 +22,7 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { PostResponseDto } from './dto/post-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -38,13 +39,20 @@ export class PostController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all posts' })
+  @ApiOperation({ summary: 'Get all posts with pagination' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'published', required: false, type: Boolean })
   @ApiResponse({ status: 200, type: [PostResponseDto] })
-  findAll(@Query('published') published?: string) {
+  findAll(
+    @Query() pagination: PaginationDto,
+    @Query('published') published?: string,
+  ) {
     const publishedFilter =
       published === 'true' ? true : published === 'false' ? false : undefined;
-    return this.postService.findAll(publishedFilter);
+    return this.postService.findAll(pagination, publishedFilter);
   }
 
   @Get('my')

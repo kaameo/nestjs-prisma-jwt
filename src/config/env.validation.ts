@@ -11,7 +11,7 @@ export const EnvSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_SECRET: z
     .string()
-    .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
+    .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters for security'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
   // Application
@@ -24,6 +24,9 @@ export const EnvSchema = z.object({
   BCRYPT_SALT_ROUNDS: z.string().default('10').transform(Number),
   THROTTLE_TTL: z.string().default('60000').transform(Number),
   THROTTLE_LIMIT: z.string().default('10').transform(Number),
+
+  // CORS (optional, for production)
+  CORS_ORIGIN: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;

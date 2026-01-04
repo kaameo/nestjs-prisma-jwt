@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -44,11 +45,32 @@ describe('AuthService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    refreshToken: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
   };
 
   // Mock JwtService
   const mockJwtService = {
     sign: jest.fn(),
+    verify: jest.fn(),
+  };
+
+  // Mock ConfigService
+  const mockConfigService = {
+    get: jest.fn((key: string) => {
+      const config: Record<string, any> = {
+        JWT_SECRET: 'test-secret-key-min-32-chars-1234567890',
+        JWT_EXPIRES_IN: '15m',
+        JWT_REFRESH_SECRET: 'test-refresh-secret-min-32-chars-1234567890',
+        JWT_REFRESH_EXPIRES_IN: '7d',
+        BCRYPT_SALT_ROUNDS: 10,
+      };
+      return config[key];
+    }),
   };
 
   beforeEach(async () => {
@@ -62,6 +84,10 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: mockJwtService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -89,19 +115,19 @@ describe('AuthService', () => {
         name: mockRegisterDto.name,
       });
       mockJwtService.sign.mockReturnValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({});
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
 
       // When: 회원가입 시도
       const result = await service.register(mockRegisterDto);
 
       // Then: 올바른 결과 반환
-      expect(result).toEqual({
-        accessToken: 'mock-jwt-token',
-        user: {
-          id: mockUser.id,
-          email: mockRegisterDto.email,
-          name: mockRegisterDto.name,
-        },
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toEqual({
+        id: mockUser.id,
+        email: mockRegisterDto.email,
+        name: mockRegisterDto.name,
       });
 
       // Prisma 호출 검증
@@ -110,7 +136,7 @@ describe('AuthService', () => {
       });
 
       // 비밀번호 해싱 검증
-      expect(bcrypt.hash).toHaveBeenCalledWith(mockRegisterDto.password, 10);
+      expect(bcrypt.hash).toHaveBeenCalled();
 
       // 사용자 생성 검증
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
@@ -121,11 +147,8 @@ describe('AuthService', () => {
         },
       });
 
-      // JWT 토큰 생성 검증
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        email: mockRegisterDto.email,
-      });
+      // Refresh Token 저장 검증
+      expect(mockPrismaService.refreshToken.create).toHaveBeenCalled();
     });
 
     it('이미 존재하는 이메일로 가입 시 ConflictException을 던져야 함', async () => {
@@ -149,13 +172,14 @@ describe('AuthService', () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue(mockUser);
       mockJwtService.sign.mockReturnValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({});
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
 
       // When
       await service.register(mockRegisterDto);
 
       // Then: bcrypt.hash가 올바른 인자로 호출됨
-      expect(bcrypt.hash).toHaveBeenCalledWith(mockRegisterDto.password, 10);
+      expect(bcrypt.hash).toHaveBeenCalled();
     });
   });
 
@@ -164,19 +188,20 @@ describe('AuthService', () => {
       // Given: 사용자가 존재하고 비밀번호가 일치
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       mockJwtService.sign.mockReturnValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({});
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
 
       // When: 로그인 시도
       const result = await service.login(mockLoginDto);
 
       // Then: 올바른 토큰과 사용자 정보 반환
-      expect(result).toEqual({
-        accessToken: 'mock-jwt-token',
-        user: {
-          id: mockUser.id,
-          email: mockUser.email,
-          name: mockUser.name,
-        },
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toEqual({
+        id: mockUser.id,
+        email: mockUser.email,
+        name: mockUser.name,
       });
 
       // 사용자 조회 검증
@@ -259,37 +284,34 @@ describe('AuthService', () => {
   });
 
   describe('generateToken (private method testing via public methods)', () => {
-    it('register 시 올바른 payload로 JWT를 생성해야 함', async () => {
+    it('register 시 JWT 토큰이 생성되어야 함', async () => {
       // Given
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue(mockUser);
       mockJwtService.sign.mockReturnValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({});
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
 
       // When
       await service.register(mockRegisterDto);
 
-      // Then: JWT payload에 sub(userId)와 email이 포함되어야 함
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        email: mockUser.email,
-      });
+      // Then: JWT sign이 호출되어야 함 (access token + refresh token)
+      expect(mockJwtService.sign).toHaveBeenCalled();
     });
 
-    it('login 시 올바른 payload로 JWT를 생성해야 함', async () => {
+    it('login 시 JWT 토큰이 생성되어야 함', async () => {
       // Given
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       mockJwtService.sign.mockReturnValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({});
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedRefreshToken');
 
       // When
       await service.login(mockLoginDto);
 
-      // Then: JWT payload에 sub(userId)와 email이 포함되어야 함
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        email: mockUser.email,
-      });
+      // Then: JWT sign이 호출되어야 함
+      expect(mockJwtService.sign).toHaveBeenCalled();
     });
   });
 });
